@@ -19,7 +19,62 @@ The Sail-operator does not manage Gateways. You can deploy a gateway manually ei
 tbd
 
 ## Examples
-tbd
+
+### Observability with Bookinfo
+
+Pre-requisites:
+
+The sample below will deploy:
+
+- Prometheus
+- Jaeger
+- Kiali
+- Bookinfo
+
+### Deploy Prometheus, Jaeger, and Kiali
+
+```sh
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/addons/prometheus.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/addons/jaeger.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/addons/kiali.yaml
+```
+
+### Deploy Gateway API and Bookinfo
+
+Gateway API CRDs
+```sh
+kubectl get crd gateways.gateway.networking.k8s.io &> /dev/null || \
+  { kubectl kustomize "github.com/kubernetes-sigs/gateway-api/config/crd?ref=v1.1.0" | kubectl apply -f -; }
+```
+
+Bookinfo
+```sh
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/bookinfo/platform/kube/bookinfo.yaml
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/bookinfo/platform/kube/bookinfo-versions.yaml
+kubectl label namespace default istio-injection=enabled
+```
+
+Create gateway
+
+```sh
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.22/samples/bookinfo/gateway-api/bookinfo-gateway.yaml
+kubectl wait --for=condition=programmed gtw bookinfo-gateway
+```
+
+Send traffic to the productpage service
+```sh
+export INGRESS_HOST=$(kubectl get gtw bookinfo-gateway -o jsonpath='{.status.addresses[0].value}')
+export INGRESS_PORT=$(kubectl get gtw bookinfo-gateway -o jsonpath='{.spec.listeners[?(@.name=="http")].port}')
+export GATEWAY_URL=$INGRESS_HOST:$INGRESS_PORT
+watch curl http://${GATEWAY_URL}/productpage &> /dev/null
+```
+
+Open Kiali to visualize your mesh
+```sh
+kubectl port-forward -n istio-system svc/kiali 20001:20001
+```
+
+Visit Kiali at: http://localhost:20001
 
 ## Observability Integrations
 
