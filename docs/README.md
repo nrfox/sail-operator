@@ -18,11 +18,11 @@ The Sail-operator does not manage Gateways. You can deploy a gateway manually ei
 ## Multicluster
 tbd
 
-## Examples
+## Addons
+
+Addons are managed separately from the Sail-operator. Below are some examples of how to install addons for Istio.
 
 ### Observability with Bookinfo
-
-Pre-requisites:
 
 The sample below will deploy:
 
@@ -30,6 +30,10 @@ The sample below will deploy:
 - Jaeger
 - Kiali
 - Bookinfo
+
+*Prerequisites*
+
+- Control Plane installed with Sail.
 
 ### Deploy Prometheus, Jaeger, and Kiali
 
