@@ -31,7 +31,8 @@ spec:
         # Set a unique label for the gateway. This is required to ensure Gateways can select this workload
         istio: ingressgateway
         # Enable gateway injection. If connecting to a revisioned control plane, replace with "istio.io/rev: revision-name"
-        sidecar.istio.io/inject: "true"
+        # sidecar.istio.io/inject: "true"
+        istio.io/rev: usergroup-2-v1-22-2
     spec:
       containers:
       - name: istio-proxy

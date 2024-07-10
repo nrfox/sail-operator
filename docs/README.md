@@ -78,6 +78,191 @@ The Sail-operator does not manage Gateways. You can deploy a gateway manually ei
 ## Multicluster
 tbd
 
+## Multitenancy
+
+### Install controlplanes
+
+Adataped from: https://istio.io/latest/docs/setup/install/multiple-controlplanes/
+
+1. Create controlplane `usergroup-1` and `usergroup-2`
+
+```bash
+kubectl apply -f multitenancy/istio.yaml
+```
+
+2. Deploy a policy for workloads in the `usergroup-1` namespace to only accept mutual TLS traffic:
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: "usergroup-1-peerauth"
+  namespace: "usergroup-1"
+spec:
+  mtls:
+    mode: STRICT
+EOF
+```
+
+3. Deploy a policy for workloads in the `usergroup-2` namespace to only accept mutual TLS traffic:
+
+```bash
+kubectl apply -f - <<EOF
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: "usergroup-2-peerauth"
+  namespace: "usergroup-2"
+spec:
+  mtls:
+    mode: STRICT
+EOF
+```
+
+### Verify the multiple control plane creation
+
+1. Check the labels on the system namespaces for each control plane:
+
+```bash
+$ kubectl get ns usergroup-1 usergroup-2 --show-labels
+NAME              STATUS   AGE     LABELS
+usergroup-1       Active   13m     kubernetes.io/metadata.name=usergroup-1,usergroup=usergroup-1
+usergroup-2       Active   12m     kubernetes.io/metadata.name=usergroup-2,usergroup=usergroup-2
+```
+
+2. Verify the control planes are deployed and running:
+
+```bash
+$ kubectl get pods -n usergroup-1
+NAME                                          READY   STATUS    RESTARTS   AGE
+istiod-usergroup-1-v1-22-2-5755b789bf-gg5qj   1/1     Running   0          4m34s
+```
+
+```bash
+$ kubectl get pods -n usergroup-2
+NAME                                          READY   STATUS    RESTARTS   AGE
+istiod-usergroup-2-v1-22-2-7b9f7dd4ff-fw2b7   1/1     Running   0          3m34s
+```
+
+You will notice that one istiod deployment per usergroup is created in the specified namespaces.
+
+3. Run the following commands to list the installed webhooks:
+
+```bash
+$ kubectl get validatingwebhookconfiguration
+NAME                                              WEBHOOKS   AGE
+istio-validator-usergroup-1-v1-22-2-usergroup-1   1          3m48s
+istio-validator-usergroup-2-v1-22-2-usergroup-2   1          3m45s
+```
+
+```bash
+$ kubectl get mutatingwebhookconfiguration
+NAME                                                     WEBHOOKS   AGE
+istio-sidecar-injector-usergroup-1-v1-22-2-usergroup-1   2          3m53s
+istio-sidecar-injector-usergroup-2-v1-22-2-usergroup-2   2          3m50s
+```
+
+### Deploy application workloads per usergroup
+
+1. Create three application namespaces:
+
+```bash
+kubectl create ns app-ns-1
+kubectl create ns app-ns-2
+kubectl create ns app-ns-3
+```
+
+2. Label each namespace to associate them with their respective control planes:
+
+Note that version is postfixed onto the controlplane.
+
+```bash
+kubectl label ns app-ns-1 usergroup=usergroup-1 istio.io/rev=usergroup-1-v1-22-2 --overwrite=true
+kubectl label ns app-ns-2 usergroup=usergroup-2 istio.io/rev=usergroup-2-v1-22-2 --overwrite=true
+kubectl label ns app-ns-3 usergroup=usergroup-2 istio.io/rev=usergroup-2-v1-22-2 --overwrite=true
+```
+3. Deploy one sleep and httpbin application per namespace:
+
+```bash
+kubectl -n app-ns-1 apply -f https://raw.githubusercontent.com/istio/istio/master/samples/sleep/sleep.yaml
+kubectl -n app-ns-1 apply -f https://raw.githubusercontent.com/istio/istio/master/samples/httpbin/httpbin.yaml
+kubectl -n app-ns-2 apply -f https://raw.githubusercontent.com/istio/istio/master/samples/sleep/sleep.yaml
+kubectl -n app-ns-2 apply -f https://raw.githubusercontent.com/istio/istio/master/samples/httpbin/httpbin.yaml
+kubectl -n app-ns-3 apply -f https://raw.githubusercontent.com/istio/istio/master/samples/sleep/sleep.yaml
+kubectl -n app-ns-3 apply -f https://raw.githubusercontent.com/istio/istio/master/samples/httpbin/httpbin.yaml
+```
+
+4. Wait a few seconds for the httpbin and sleep pods to be running with sidecars injected:
+
+```bash
+$ kubectl get pods -n app-ns-1
+NAME                       READY   STATUS    RESTARTS   AGE
+httpbin-86b8ffc5ff-hhrgr   2/2     Running   0          27s
+sleep-7656cf8794-4v4hk     2/2     Running   0          27s
+```
+
+```bash
+$ kubectl get pods -n app-ns-2
+NAME                       READY   STATUS    RESTARTS   AGE
+httpbin-86b8ffc5ff-sg8vp   2/2     Running   0          59s
+sleep-7656cf8794-96vj9     2/2     Running   0          59s
+```
+
+```bash
+$ kubectl get pods -n app-ns-3
+NAME                       READY   STATUS    RESTARTS   AGE
+httpbin-86b8ffc5ff-lvv8g   2/2     Running   0          91s
+sleep-7656cf8794-pq68b     2/2     Running   0          91s
+```
+
+### Verify the application to control plane mapping
+
+Now that the applications are deployed, you can use the istioctl ps command to confirm that the application workloads are managed by their respective control plane, i.e., app-ns-1 is managed by usergroup-1, app-ns-2 and app-ns-3 are managed by usergroup-2:
+
+```bash
+$ istioctl ps -i usergroup-1
+NAME                                  CLUSTER        CDS        LDS        EDS        RDS        ECDS         ISTIOD                                          VERSION
+httpbin-86b8ffc5ff-hhrgr.app-ns-1     Kubernetes     SYNCED     SYNCED     SYNCED     SYNCED     NOT SENT     istiod-usergroup-1-v1-22-2-5755b789bf-gg5qj     1.22.2
+sleep-7656cf8794-4v4hk.app-ns-1       Kubernetes     SYNCED     SYNCED     SYNCED     SYNCED     NOT SENT     istiod-usergroup-1-v1-22-2-5755b789bf-gg5qj     1.22.2
+```
+
+```bash
+$ istioctl ps -i usergroup-2
+NAME                                  CLUSTER        CDS        LDS        EDS        RDS        ECDS         ISTIOD                                          VERSION
+httpbin-86b8ffc5ff-lvv8g.app-ns-3     Kubernetes     SYNCED     SYNCED     SYNCED     SYNCED     NOT SENT     istiod-usergroup-2-v1-22-2-7b9f7dd4ff-fw2b7     1.22.2
+httpbin-86b8ffc5ff-sg8vp.app-ns-2     Kubernetes     SYNCED     SYNCED     SYNCED     SYNCED     NOT SENT     istiod-usergroup-2-v1-22-2-7b9f7dd4ff-fw2b7     1.22.2
+sleep-7656cf8794-96vj9.app-ns-2       Kubernetes     SYNCED     SYNCED     SYNCED     SYNCED     NOT SENT     istiod-usergroup-2-v1-22-2-7b9f7dd4ff-fw2b7     1.22.2
+sleep-7656cf8794-pq68b.app-ns-3       Kubernetes     SYNCED     SYNCED     SYNCED     SYNCED     NOT SENT     istiod-usergroup-2-v1-22-2-7b9f7dd4ff-fw2b7     1.22.2
+```
+
+### Verify the application connectivity is ONLY within the respective usergroup
+
+1. Send a request from the sleep pod in app-ns-1 in usergroup-1 to the httpbin service in app-ns-2 in usergroup-2. The communication should fail:
+
+```bash
+$ kubectl -n app-ns-1 exec "$(kubectl -n app-ns-1 get pod -l app=sleep -o jsonpath={.items..metadata.name})" -c sleep -- curl -sIL http://httpbin.app-ns-2.svc.cluster.local:8000
+HTTP/1.1 503 Service Unavailable
+content-length: 95
+content-type: text/plain
+date: Wed, 10 Jul 2024 19:40:09 GMT
+server: envoy
+```
+
+2. Send a request from the sleep pod in app-ns-2 in usergroup-2 to the httpbin service in app-ns-3 in usergroup-2. The communication should work:
+
+```bash
+$ kubectl -n app-ns-2 exec "$(kubectl -n app-ns-2 get pod -l app=sleep -o jsonpath={.items..metadata.name})" -c sleep -- curl -sIL http://httpbin.app-ns-3.svc.cluster.local:8000
+HTTP/1.1 200 OK
+server: envoy
+date: Wed, 10 Jul 2024 19:40:41 GMT
+content-type: text/html; charset=utf-8
+content-length: 9593
+access-control-allow-origin: *
+access-control-allow-credentials: true
+x-envoy-upstream-service-time: 12
+```
+
 ## Addons
 
 Addons are managed separately from the Sail-operator. You can follow the [istio documentation](https://istio.io/latest/docs/ops/integrations/) for how to install addons. Below is an example of how to install some addons for Istio.

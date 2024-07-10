@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: usergroup-1
+  labels:
+    usergroup: usergroup-1
+---
+apiVersion: operator.istio.io/v1alpha1
+kind: Istio
+metadata:
+  name: usergroup-1
+spec:
+  profile: minimal
+  version: v1.22.2
+  namespace: usergroup-1
+  updateStrategy:
+    type: RevisionBased
+    inactiveRevisionDeletionGracePeriodSeconds: 30
+  values:
+    global:
+      istioNamespace: usergroup-1
+    meshConfig:
+      discoverySelectors:
+        - matchLabels:
+            usergroup: usergroup-1
+    pilot:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 1024Mi
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: usergroup-2
+  labels:
+    usergroup: usergroup-2
+---
+apiVersion: operator.istio.io/v1alpha1
+kind: Istio
+metadata:
+  name: usergroup-2
+spec:
+  profile: minimal
+  version: v1.22.2
+  namespace: usergroup-2
+  updateStrategy:
+    type: RevisionBased
+    inactiveRevisionDeletionGracePeriodSeconds: 30
+  values:
+    global:
+      istioNamespace: usergroup-2
+    meshConfig:
+      discoverySelectors:
+        - matchLabels:
+            usergroup: usergroup-2
+    pilot:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 1024Mi
