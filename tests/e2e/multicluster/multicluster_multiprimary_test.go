@@ -32,6 +32,7 @@ import (
 	. "github.com/istio-ecosystem/sail-operator/tests/e2e/util/gomega"
 	"github.com/istio-ecosystem/sail-operator/tests/e2e/util/helm"
 	"github.com/istio-ecosystem/sail-operator/tests/e2e/util/istioctl"
+	"github.com/istio-ecosystem/sail-operator/tests/e2e/util/kubectl"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -201,7 +202,7 @@ spec:
 				When("sample apps are deployed in both clusters", func() {
 					BeforeAll(func(ctx SpecContext) {
 						// Deploy the sample app in both clusters
-						deploySampleApp("sample", version)
+						deploySampleAppToAllClusters("sample", version)
 						Success("Sample app is deployed in both clusters")
 					})
 
@@ -282,15 +283,12 @@ spec:
 })
 
 // deploySampleApp deploys the sample app in the given cluster
-func deploySampleApp(ns string, istioVersion supportedversion.VersionInfo) {
+func deploySampleApp(k kubectl.Kubectl, ns string, istioVersion supportedversion.VersionInfo, appVersion string) {
 	// Create the namespace
-	Expect(k1.CreateNamespace(ns)).To(Succeed(), "Namespace failed to be created")
-	Expect(k2.CreateNamespace(ns)).To(Succeed(), "Namespace failed to be created")
+	Expect(k.CreateNamespace(ns)).To(Succeed(), "Namespace failed to be created")
 
 	// Label the namespace
-	Expect(k1.Patch("namespace", ns, "merge", `{"metadata":{"labels":{"istio-injection":"enabled"}}}`)).
-		To(Succeed(), "Error patching sample namespace")
-	Expect(k2.Patch("namespace", ns, "merge", `{"metadata":{"labels":{"istio-injection":"enabled"}}}`)).
+	Expect(k.Patch("namespace", ns, "merge", `{"metadata":{"labels":{"istio-injection":"enabled"}}}`)).
 		To(Succeed(), "Error patching sample namespace")
 
 	version := istioVersion.Version.String()
@@ -299,13 +297,16 @@ func deploySampleApp(ns string, istioVersion supportedversion.VersionInfo) {
 		version = "master"
 	}
 	helloWorldURL := fmt.Sprintf("https://raw.githubusercontent.com/istio/istio/%s/samples/helloworld/helloworld.yaml", version)
-	Expect(k1.WithNamespace(ns).ApplyWithLabels(helloWorldURL, "service=helloworld")).To(Succeed(), "Sample service deploy failed on Cluster #1")
-	Expect(k2.WithNamespace(ns).ApplyWithLabels(helloWorldURL, "service=helloworld")).To(Succeed(), "Sample service deploy failed on Cluster #2")
+	Expect(k.WithNamespace(ns).ApplyWithLabels(helloWorldURL, "service=helloworld")).To(Succeed(), "Sample service deploy failed on Cluster #1")
 
-	Expect(k1.WithNamespace(ns).ApplyWithLabels(helloWorldURL, "version=v1")).To(Succeed(), "Sample service deploy failed on Cluster #1")
-	Expect(k2.WithNamespace(ns).ApplyWithLabels(helloWorldURL, "version=v2")).To(Succeed(), "Sample service deploy failed on Cluster #2")
+	Expect(k.WithNamespace(ns).ApplyWithLabels(helloWorldURL, "version="+appVersion)).To(Succeed(), "Sample service deploy failed on Cluster #1")
 
 	sleepURL := fmt.Sprintf("https://raw.githubusercontent.com/istio/istio/%s/samples/sleep/sleep.yaml", version)
-	Expect(k1.WithNamespace(ns).Apply(sleepURL)).To(Succeed(), "Sample sleep deploy failed on Cluster #1")
-	Expect(k2.WithNamespace(ns).Apply(sleepURL)).To(Succeed(), "Sample sleep deploy failed on Cluster #2")
+	Expect(k.WithNamespace(ns).Apply(sleepURL)).To(Succeed(), "Sample sleep deploy failed on Cluster #1")
+}
+
+func deploySampleAppToAllClusters(ns string, istioVersion supportedversion.VersionInfo) {
+	// Create the namespace
+	deploySampleApp(k1, ns, istioVersion, "v1")
+	deploySampleApp(k2, ns, istioVersion, "v2")
 }

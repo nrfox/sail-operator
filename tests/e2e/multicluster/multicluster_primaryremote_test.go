@@ -172,9 +172,7 @@ spec:
     global:
       remotePilotAddress: %s`
 
-						remotePilotAddress, err := common.GetSVCLoadBalancerAddress(ctx, clPrimary, controlPlaneNamespace, "istio-eastwestgateway")
-						Expect(remotePilotAddress).NotTo(BeEmpty(), "Remote Pilot Address is empty")
-						Expect(err).NotTo(HaveOccurred(), "Error getting Remote Pilot Address")
+						remotePilotAddress := common.GetSVCLoadBalancerAddress(ctx, clPrimary, controlPlaneNamespace, "istio-eastwestgateway")
 						remoteIstioYAML := fmt.Sprintf(RemoteYAML, version.Name, remotePilotAddress)
 						Log("RemoteIstio CR: ", remoteIstioYAML)
 						By("Creating RemoteIstio CR on Remote Cluster")
@@ -246,7 +244,7 @@ spec:
 				When("sample apps are deployed in both clusters", func() {
 					BeforeAll(func(ctx SpecContext) {
 						// Deploy the sample app in both clusters
-						deploySampleApp("sample", version)
+						deploySampleAppToAllClusters("sample", version)
 						Success("Sample app is deployed in both clusters")
 					})
 

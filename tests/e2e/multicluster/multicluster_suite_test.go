@@ -32,25 +32,28 @@ import (
 )
 
 var (
-	clPrimary             client.Client
-	clRemote              client.Client
-	err                   error
-	ocp                   = env.GetBool("OCP", false)
-	namespace             = env.Get("NAMESPACE", "sail-operator")
-	deploymentName        = env.Get("DEPLOYMENT_NAME", "sail-operator")
-	controlPlaneNamespace = env.Get("CONTROL_PLANE_NS", "istio-system")
-	istioName             = env.Get("ISTIO_NAME", "default")
-	image                 = env.Get("IMAGE", "quay.io/maistra-dev/sail-operator:latest")
-	skipDeploy            = env.GetBool("SKIP_DEPLOY", false)
-	multicluster          = env.GetBool("MULTICLUSTER", false)
-	kubeconfig            = env.Get("KUBECONFIG", "")
-	kubeconfig2           = env.Get("KUBECONFIG2", "")
-	artifacts             = env.Get("ARTIFACTS", "/tmp/artifacts")
+	clPrimary                     client.Client
+	clRemote                      client.Client
+	err                           error
+	ocp                           = env.GetBool("OCP", false)
+	namespace                     = env.Get("NAMESPACE", "sail-operator")
+	deploymentName                = env.Get("DEPLOYMENT_NAME", "sail-operator")
+	controlPlaneNamespace         = env.Get("CONTROL_PLANE_NS", "istio-system")
+	externalControlPlaneNamespace = env.Get("EXTERNAL_CONTROL_PLANE_NS", "external-istiod")
+	istioName                     = env.Get("ISTIO_NAME", "default")
+	image                         = env.Get("IMAGE", "quay.io/maistra-dev/sail-operator:latest")
+	skipCleanup                   = env.GetBool("SKIP_CLEANUP", false)
+	skipDeploy                    = env.GetBool("SKIP_DEPLOY", false)
+	multicluster                  = env.GetBool("MULTICLUSTER", false)
+	kubeconfig                    = env.Get("KUBECONFIG", "")
+	kubeconfig2                   = env.Get("KUBECONFIG2", "")
+	artifacts                     = env.Get("ARTIFACTS", "/tmp/artifacts")
 
-	eastGatewayYAML   string
-	westGatewayYAML   string
-	exposeServiceYAML string
-	exposeIstiodYAML  string
+	controlPlaneGatewayYAML string
+	eastGatewayYAML         string
+	westGatewayYAML         string
+	exposeServiceYAML       string
+	exposeIstiodYAML        string
 
 	k1 kubectl.Kubectl
 	k2 kubectl.Kubectl
@@ -93,6 +96,7 @@ func setup(t *testing.T) {
 
 	// Set base path
 	baseRepoDir := filepath.Join(workDir, "../../..")
+	controlPlaneGatewayYAML = fmt.Sprintf("%s/docs/multicluster/controlplane-gateway.yaml", baseRepoDir)
 	eastGatewayYAML = fmt.Sprintf("%s/docs/multicluster/east-west-gateway-net1.yaml", baseRepoDir)
 	westGatewayYAML = fmt.Sprintf("%s/docs/multicluster/east-west-gateway-net2.yaml", baseRepoDir)
 	exposeServiceYAML = fmt.Sprintf("%s/docs/multicluster/expose-services.yaml", baseRepoDir)

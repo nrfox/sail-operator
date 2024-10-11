@@ -26,7 +26,7 @@
   - [Common Setup](#common-setup)
   - [Multi-Primary](#multi-primary---multi-network)
   - [Primary-Remote](#primary-remote---multi-network)
-  - [External Control Plane](#external-controlplane)
+  - [External Control Plane](#external-control-plane)
 - [Addons](#addons)
   - [Deploy Prometheus and Jaeger addons](#deploy-prometheus-and-jaeger-addons)
   - [Deploy Kiali addon](#deploy-kiali-addon)
