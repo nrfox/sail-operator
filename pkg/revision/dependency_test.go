@@ -19,6 +19,7 @@ import (
 
 	v1 "github.com/istio-ecosystem/sail-operator/api/v1"
 	"github.com/istio-ecosystem/sail-operator/pkg/config"
+	"github.com/istio-ecosystem/sail-operator/pkg/istiovalues"
 	"github.com/stretchr/testify/assert"
 
 	"istio.io/istio/pkg/ptr"
@@ -26,7 +27,7 @@ import (
 
 // mockComputeValues returns the input values without any computation
 // this simulates what ComputeValues would do but without requiring actual files
-func mockComputeValues(values *v1.Values, _, _ string, platform config.Platform, defaultProfile, userProfile, _, _ string) (*v1.Values, error) {
+func mockComputeValues(values *v1.Values, _, _ string, platform config.Platform, defaultProfile, userProfile, _, _ string, _ *istiovalues.TLSSettings) (*v1.Values, error) {
 	if values == nil {
 		values = &v1.Values{}
 	}

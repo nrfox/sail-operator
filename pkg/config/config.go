@@ -15,6 +15,7 @@
 package config
 
 import (
+	"crypto/tls"
 	"strings"
 
 	"github.com/magiconair/properties"
@@ -34,6 +35,9 @@ type IstioImageConfig struct {
 }
 
 type ReconcilerConfig struct {
+	// TLSConfigLoader is a function that returns a TLS config for the operator to use.
+	// It can be nil.
+	TLSConfigLoader         func() (*tls.Config, error)
 	ResourceDirectory       string
 	Platform                Platform
 	DefaultProfile          string

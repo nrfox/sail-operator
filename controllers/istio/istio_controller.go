@@ -27,19 +27,24 @@ import (
 	"github.com/istio-ecosystem/sail-operator/pkg/config"
 	"github.com/istio-ecosystem/sail-operator/pkg/enqueuelogger"
 	"github.com/istio-ecosystem/sail-operator/pkg/errlist"
+	"github.com/istio-ecosystem/sail-operator/pkg/istiovalues"
 	"github.com/istio-ecosystem/sail-operator/pkg/istioversion"
 	"github.com/istio-ecosystem/sail-operator/pkg/kube"
 	"github.com/istio-ecosystem/sail-operator/pkg/reconciler"
 	"github.com/istio-ecosystem/sail-operator/pkg/revision"
+	configv1 "github.com/openshift/api/config/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"istio.io/istio/pkg/ptr"
@@ -63,6 +68,7 @@ func NewReconciler(cfg config.ReconcilerConfig, client client.Client, scheme *ru
 // +kubebuilder:rbac:groups=sailoperator.io,resources=istios,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=sailoperator.io,resources=istios/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=sailoperator.io,resources=istios/finalizers,verbs=update
+// +kubebuilder:rbac:groups=config.openshift.io,resources=apiservers,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -121,14 +127,26 @@ func validate(istio *v1.Istio) error {
 }
 
 func (r *Reconciler) reconcileActiveRevision(ctx context.Context, istio *v1.Istio) error {
+	log := logf.FromContext(ctx)
 	version, err := istioversion.Resolve(istio.Spec.Version)
 	if err != nil {
 		return fmt.Errorf("failed to resolve Istio version for %q: %w", istio.Name, err)
 	}
+
+	// Get TLS settings from OpenShift APIServer if running on OpenShift
+	var tlsSettings *istiovalues.TLSSettings
+	if r.Config.Platform == config.PlatformOpenShift {
+		tlsSettings, err = r.getTLSSettings(ctx)
+		if err != nil {
+			log.Error(err, "failed to get TLS settings from APIServer, using defaults")
+			// Continue with nil tlsSettings, which will skip applying them
+		}
+	}
+
 	values, err := revision.ComputeValues(
 		istio.Spec.Values, istio.Spec.Namespace, version,
 		r.Config.Platform, r.Config.DefaultProfile, istio.Spec.Profile,
-		r.Config.ResourceDirectory, getActiveRevisionName(istio))
+		r.Config.ResourceDirectory, getActiveRevisionName(istio), tlsSettings)
 	if err != nil {
 		return err
 	}
@@ -144,6 +162,16 @@ func (r *Reconciler) reconcileActiveRevision(ctx context.Context, istio *v1.Isti
 			Controller:         ptr.Of(true),
 			BlockOwnerDeletion: ptr.Of(true),
 		})
+}
+
+// getTLSSettings retrieves TLS settings from the OpenShift APIServer resource.
+func (r *Reconciler) getTLSSettings(ctx context.Context) (*istiovalues.TLSSettings, error) {
+	apiServer := &configv1.APIServer{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Name: "cluster"}, apiServer); err != nil {
+		return nil, fmt.Errorf("failed to get APIServer 'cluster': %w", err)
+	}
+	settings := istiovalues.GetTLSSettingsFromAPIServer(apiServer)
+	return &settings, nil
 }
 
 func getPruningGracePeriod(istio *v1.Istio) time.Duration {
@@ -200,7 +228,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	ownedResourceHandler := wrapEventHandler(logger,
 		handler.EnqueueRequestForOwner(r.Scheme, r.RESTMapper(), &v1.Istio{}, handler.OnlyControllerOwner()))
 
-	return ctrl.NewControllerManagedBy(mgr).
+	ctrlBuilder := ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{
 			LogConstructor: func(req *reconcile.Request) logr.Logger {
 				log := logger
@@ -215,8 +243,61 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// +lint-watches:ignore: Istio (not found in charts, but this is the main resource watched by this controller)
 		Watches(&v1.Istio{}, mainObjectHandler).
 		Named("istio").
-		Watches(&v1.IstioRevision{}, ownedResourceHandler).
-		Complete(reconciler.NewStandardReconciler[*v1.Istio](r.Client, r.Reconcile))
+		Watches(&v1.IstioRevision{}, ownedResourceHandler)
+
+	// Watch APIServer resource for TLS settings changes on OpenShift
+	if r.Config.Platform == config.PlatformOpenShift {
+		// apiServerHandler triggers reconciliation of all Istio resources when the APIServer TLS settings change
+		apiServerHandler := wrapEventHandler(logger, handler.EnqueueRequestsFromMapFunc(r.mapAPIServerToReconcileRequests))
+
+		ctrlBuilder = ctrlBuilder.Watches(
+			&configv1.APIServer{},
+			apiServerHandler,
+			builder.WithPredicates(apiServerTLSChangedPredicate()))
+	}
+
+	return ctrlBuilder.Complete(reconciler.NewStandardReconciler(r.Client, r.Reconcile))
+}
+
+// mapAPIServerToReconcileRequests returns reconcile requests for all Istio resources
+// when the APIServer TLS settings change.
+func (r *Reconciler) mapAPIServerToReconcileRequests(ctx context.Context, _ client.Object) []reconcile.Request {
+	list := v1.IstioList{}
+	if err := r.Client.List(ctx, &list); err != nil {
+		return nil
+	}
+	var reqs []reconcile.Request
+	for _, istio := range list.Items {
+		reqs = append(reqs, reconcile.Request{NamespacedName: types.NamespacedName{Name: istio.Name}})
+	}
+	return reqs
+}
+
+// apiServerTLSChangedPredicate returns a predicate that filters APIServer events
+// to only trigger reconciliation when the TLS security profile changes.
+func apiServerTLSChangedPredicate() predicate.Predicate {
+	return predicate.Funcs{
+		CreateFunc: func(e event.CreateEvent) bool {
+			return true
+		},
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			oldAPIServer, ok := e.ObjectOld.(*configv1.APIServer)
+			if !ok {
+				return false
+			}
+			newAPIServer, ok := e.ObjectNew.(*configv1.APIServer)
+			if !ok {
+				return false
+			}
+			return !reflect.DeepEqual(oldAPIServer.Spec.TLSSecurityProfile, newAPIServer.Spec.TLSSecurityProfile)
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			return false
+		},
+		GenericFunc: func(e event.GenericEvent) bool {
+			return false
+		},
+	}
 }
 
 func (r *Reconciler) determineStatus(ctx context.Context, istio *v1.Istio, reconcileErr error) (v1.IstioStatus, error) {

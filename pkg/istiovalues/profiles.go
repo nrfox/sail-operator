@@ -28,6 +28,7 @@ import (
 	"istio.io/istio/pkg/util/sets"
 )
 
+// TODO: Somewhere in the values we need to apply the dynamic TLS config settings.
 func ApplyProfilesAndPlatform(
 	resourceDir string, version string, platform config.Platform, defaultProfile, userProfile string, userValues helm.Values,
 ) (helm.Values, error) {

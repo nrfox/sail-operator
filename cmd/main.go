@@ -15,11 +15,18 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
+
+	configv1 "github.com/openshift/api/config/v1"
+	configclient "github.com/openshift/client-go/config/clientset/versioned"
+	"github.com/openshift/library-go/pkg/crypto"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
 
 	"github.com/istio-ecosystem/sail-operator/controllers/istio"
 	"github.com/istio-ecosystem/sail-operator/controllers/istiocni"
@@ -104,6 +111,13 @@ func main() {
 		})
 	}
 
+	minTLSVersion, cipherSuites, err := getTLSConfig(context.Background(), cfg)
+	if err != nil {
+		setupLog.Error(err, "failed to get TLS config from APIServer")
+	} else {
+		setupLog.Info("TLS config from APIServer", "minTLSVersion", minTLSVersion, "cipherSuites", cipherSuites)
+	}
+
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
 	// prevent from being vulnerable to the HTTP/2 Stream Cancellation and
@@ -115,9 +129,21 @@ func main() {
 		c.NextProtos = []string{"http/1.1"}
 	}
 
+	apiServerTLSConfig := func(c *tls.Config) {
+		c.MinVersion = tlsVersionToID(minTLSVersion)
+		c.CipherSuites = cipherSuitesToIDs(cipherSuites)
+		c.GetConfigForClient = func(*tls.ClientHelloInfo) (*tls.Config, error) {
+			cfg := c.Clone()
+			cfg.MinVersion = tlsVersionToID(minTLSVersion)
+			cfg.CipherSuites = cipherSuitesToIDs(cipherSuites)
+			return cfg, nil
+		}
+	}
+
 	tlsOpts := []func(*tls.Config){
 		// disable http/2 because of https://github.com/kubernetes/kubernetes/issues/121197
 		disableHTTP2,
+		apiServerTLSConfig,
 	}
 
 	metricsServerOptions := metricsserver.Options{
@@ -235,3 +261,72 @@ func (rl requestLogger) RoundTrip(req *http.Request) (*http.Response, error) {
 }
 
 var _ http.RoundTripper = requestLogger{}
+
+func getTLSConfig(ctx context.Context, restConfig *rest.Config) (minTLSVersion string, cipherSuites []string, err error) {
+	client, err := configclient.NewForConfig(restConfig)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create config client: %w", err)
+	}
+
+	apiServer, err := client.ConfigV1().APIServers().Get(ctx, "cluster", metav1.GetOptions{})
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to get APIServer 'cluster': %w", err)
+	}
+
+	profile := apiServer.Spec.TLSSecurityProfile
+	var profileType configv1.TLSProfileType
+	if profile == nil {
+		profileType = configv1.TLSProfileIntermediateType
+	} else {
+		profileType = profile.Type
+	}
+
+	var profileSpec *configv1.TLSProfileSpec
+	if profileType == configv1.TLSProfileCustomType {
+		if profile.Custom != nil {
+			profileSpec = &profile.Custom.TLSProfileSpec
+		}
+	} else {
+		profileSpec = configv1.TLSProfiles[profileType]
+	}
+
+	if profileSpec == nil {
+		profileSpec = configv1.TLSProfiles[configv1.TLSProfileIntermediateType]
+	}
+
+	return string(profileSpec.MinTLSVersion), crypto.OpenSSLToIANACipherSuites(profileSpec.Ciphers), nil
+}
+
+func tlsVersionToID(version string) uint16 {
+	switch version {
+	case "VersionTLS10":
+		return tls.VersionTLS10
+	case "VersionTLS11":
+		return tls.VersionTLS11
+	case "VersionTLS12":
+		return tls.VersionTLS12
+	case "VersionTLS13":
+		return tls.VersionTLS13
+	default:
+		return tls.VersionTLS12 // safe default
+	}
+}
+
+func cipherSuitesToIDs(cipherSuites []string) []uint16 {
+	// Build a lookup map of all cipher suites (secure and insecure)
+	cipherMap := make(map[string]uint16)
+	for _, cs := range tls.CipherSuites() {
+		cipherMap[cs.Name] = cs.ID
+	}
+	for _, cs := range tls.InsecureCipherSuites() {
+		cipherMap[cs.Name] = cs.ID
+	}
+
+	var ids []uint16
+	for _, name := range cipherSuites {
+		if id, ok := cipherMap[name]; ok {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
