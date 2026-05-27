@@ -1,0 +1,516 @@
+_meta:
+  controllers-architecture_extracted_at: "0b046f8c25b023933f6f7045bbb1955f7ea70b49"
+  helm-and-values_extracted_at: "0b046f8c25b023933f6f7045bbb1955f7ea70b49"
+  api-types-and-crds_extracted_at: "0b046f8c25b023933f6f7045bbb1955f7ea70b49"
+  version-management_extracted_at: "0b046f8c25b023933f6f7045bbb1955f7ea70b49"
+
+_retired_ids: []
+
+claims:
+  - id: controllers-architecture-1
+    type: pattern
+    topic: controllers-architecture
+    claim: "All controllers delegate to reconciler.NewStandardReconciler[T] or NewStandardReconcilerWithFinalizer[T] for object fetch, finalizer management, and error classification"
+    source: "pkg/reconciler/reconciler.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-2
+    type: pattern
+    topic: controllers-architecture
+    claim: "Status updates use reconciler.UpdateStatus which patches only when old and new status differ via reflect.DeepEqual"
+    source: "pkg/reconciler/status.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-3
+    type: pattern
+    topic: controllers-architecture
+    claim: "State derivation uses reconciler.DeriveState which returns the reason of the first non-True condition"
+    source: "pkg/reconciler/condition.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-4
+    type: technology
+    topic: controllers-architecture
+    claim: "Controllers use Watches() instead of For()/Owns() to wrap event handlers with enqueuelogger.WrapIfNecessary for debug logging"
+    source: "controllers/istio/istio_controller.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-5
+    type: constraint
+    topic: controllers-architecture
+    claim: "ValidationError stops reconciliation without requeue; TransientError requeues immediately"
+    source: "pkg/reconciler/errors.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-6
+    type: pattern
+    topic: controllers-architecture
+    claim: "IgnoreUpdate predicate drops all update events on ServiceAccounts to prevent removing pull secrets added by the system"
+    source: "pkg/predicate/predicate.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-7
+    type: constraint
+    topic: controllers-architecture
+    claim: "The Istio controller skips revision pruning when EXTERNAL_ISTIOD=true is set in pilot env values"
+    source: "controllers/istio/istio_controller.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-8
+    type: pattern
+    topic: controllers-architecture
+    claim: "IstioRevision controller uses webhookConfigPredicate to ignore caBundle and failurePolicy changes on webhook configurations to prevent reconciliation loops"
+    source: "controllers/istiorevision/istiorevision_controller.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-9
+    type: boundary
+    topic: controllers-architecture
+    claim: "The Istio controller does not hold a ChartManager reference — it delegates chart installation to IstioRevision via the shared revision package"
+    source: "controllers/istio/istio_controller.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-10
+    type: data_flow
+    topic: controllers-architecture
+    claim: "Istio creates and owns IstioRevision resources; IstioRevision installs istiod and base charts via shared IstiodReconciler"
+    source: "controllers/istio/istio_controller.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-11
+    type: pattern
+    topic: controllers-architecture
+    claim: "Helm release naming follows <revision-or-resource-name>-<chart-name> pattern; CNI and ZTunnel use fixed names istio-cni and ztunnel"
+    source: "pkg/reconcile/istiod.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-12
+    type: constraint
+    topic: controllers-architecture
+    claim: "HPA metadata.generation is not set by Kubernetes so ignoreStatusChange falls back to reflect.DeepEqual on spec"
+    source: "controllers/istiorevision/istiorevision_controller.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-13
+    type: data_flow
+    topic: controllers-architecture
+    claim: "IstioRevision determines InUse by checking namespace labels, pod labels/annotations, and IstioRevisionTag references"
+    source: "controllers/istiorevision/istiorevision_controller.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-14
+    type: technology
+    topic: controllers-architecture
+    claim: "ZTunnel controller watches both v1.ZTunnel and v1alpha1.ZTunnel resources for backwards compatibility"
+    source: "controllers/ztunnel/ztunnel_controller.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-15
+    type: pattern
+    topic: controllers-architecture
+    claim: "ZTunnel values require an extra ApplyUserValues step because the ztunnel chart lacks the automatic descoping template that the CNI chart has"
+    source: "pkg/reconcile/ztunnel.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-16
+    type: boundary
+    topic: controllers-architecture
+    claim: "pkg/reconcile/ was split from controllers to allow reconciliation logic to be exported as a library separate from the CRDs"
+    source: "pkg/reconcile/common.go"
+    provenance:
+      origin: user
+      context: "It was split to allow the reconciliation logic to be exported as a library separate from the CRDs."
+      recorded: "2026-05-27"
+
+  - id: controllers-architecture-17
+    type: technology
+    topic: controllers-architecture
+    claim: "The finalizer used by all controllers with finalizers is sailoperator.io/sail-operator from constants.FinalizerName"
+    source: "controllers/istiorevision/istiorevision_controller.go"
+    provenance:
+      origin: inferred
+
+  - id: controllers-architecture-18
+    type: pattern
+    topic: controllers-architecture
+    claim: "Webhook controller probes remote istiod readiness by making HTTPS GET requests to the /ready endpoint and writing results to webhook annotations"
+    source: "controllers/webhook/webhook_controller.go"
+    provenance:
+      origin: inferred
+
+  - id: helm-and-values-1
+    type: technology
+    topic: helm-and-values
+    claim: "The operator uses Helm v4 Go SDK (helm.sh/helm/v4) for chart operations, not Helm v3"
+    source: "pkg/helm/chartmanager.go"
+    provenance:
+      origin: inferred
+
+  - id: helm-and-values-2
+    type: pattern
+    topic: helm-and-values
+    claim: "Charts are loaded from fs.FS via LoadChart which walks the directory and passes files to chartv2loader.LoadFiles"
+    source: "pkg/helm/fsloader.go"
+    provenance:
+      origin: inferred
+
+  - id: helm-and-values-3
+    type: pattern
+    topic: helm-and-values
+    claim: "ChartManager recovers pending releases by force-setting status to Failed, then rolling back (version > 1) or uninstalling (version <= 1)"
+    source: "pkg/helm/chartmanager.go"
+    provenance:
+      origin: inferred
+
+  - id: helm-and-values-4
+    type: pattern
+    topic: helm-and-values
+    claim: "HelmPostRenderer adds owner references to namespaced resources and operator-sdk annotations to cross-namespace resources"
+    source: "pkg/helm/postrenderer.go"
+    provenance:
+      origin: inferred
+
+  - id: helm-and-values-5
+    type: constraint
+    topic: helm-and-values
+    claim: "HelmPostRenderer strips ValidatingWebhookConfiguration failurePolicy on upgrades to prevent clashing with istiod validation controller"
+    source: "pkg/helm/postrenderer.go"
+    provenance:
+      origin: inferred
+
+  - id: helm-and-values-6
+    type: data_flow
+    topic: helm-and-values
+    claim: "Vendor defaults are embedded from vendor_defaults.yaml at compile time and keyed by version then resource type (istio/istiocni)"
+    source: "pkg/istiovalues/vendor_defaults.go"
+    provenance:
+      origin: inferred
+
+  - id: helm-and-values-7
+    type: pattern
+    topic: helm-and-values
+    claim: "Values merge uses recursive mergeOverwrite: maps merge recursively, non-map values are replaced entirely"
+    source: "pkg/istiovalues/profiles.go"
+    provenance:
+      origin: inferred
+
+  - id: helm-and-values-8
+    type: constraint
+    topic: helm-and-values
+    claim: "Setting global.hub or global.tag disables all automatic image digest injection for that component"
+    source: "pkg/istiovalues/digests.go"
+    provenance:
+      origin: inferred
+
+  - id: helm-and-values-9
+    type: pattern
+    topic: helm-and-values
+    claim: "FIPS mode is auto-detected from /proc/sys/crypto/fips_enabled at operator startup; sets COMPLIANCE_POLICY=fips-140-2 for istiod and TLS12_ENABLED=true for ztunnel"
+    source: "pkg/istiovalues/fips.go"
+    provenance:
+      origin: inferred
+
+  - id: helm-and-values-10
+    type: constraint
+    topic: helm-and-values
+    claim: "ApplyOverrides always clears values.DefaultRevision to nil regardless of user input"
+    source: "pkg/istiovalues/overrides.go"
+    provenance:
+      origin: inferred
+
+  - id: helm-and-values-11
+    type: constraint
+    topic: helm-and-values
+    claim: "Profile file path validation prevents path traversal attacks by checking Dir(file) equals profilesDir"
+    source: "pkg/istiovalues/profiles.go"
+    provenance:
+      origin: inferred
+
+  - id: helm-and-values-12
+    type: technology
+    topic: helm-and-values
+    claim: "Helm install/upgrade actions use SkipCRDs=true, DisableOpenAPIValidation=true, MaxHistory=1, and WaitStrategy=HookOnlyStrategy"
+    source: "pkg/helm/chartmanager.go"
+    provenance:
+      origin: inferred
+
+  - id: helm-and-values-13
+    type: constraint
+    topic: helm-and-values
+    claim: "TLS --tls-min-version istiod flag is only set for Istio >= 1.29"
+    source: "pkg/istiovalues/tls.go"
+    provenance:
+      origin: inferred
+
+  - id: helm-and-values-14
+    type: boundary
+    topic: helm-and-values
+    claim: "chart/ directory is the operator's own Helm chart for deploying the operator, not Istio component charts"
+    source: "chart/"
+    provenance:
+      origin: inferred
+
+  - id: helm-and-values-15
+    type: technology
+    topic: helm-and-values
+    claim: "Values type is map[string]any with typed accessors using k8s unstructured nested field helpers"
+    source: "pkg/helm/values.go"
+    provenance:
+      origin: inferred
+
+  - id: api-types-and-crds-1
+    type: pattern
+    topic: api-types-and-crds
+    claim: "All five CRDs are cluster-scoped and categorized under istio-io"
+    source: "api/v1/istio_types.go"
+    provenance:
+      origin: inferred
+
+  - id: api-types-and-crds-2
+    type: constraint
+    topic: api-types-and-crds
+    claim: "IstioCNI and ZTunnel must be named 'default' enforced by CRD-level XValidation"
+    source: "api/v1/istiocni_types.go"
+    provenance:
+      origin: inferred
+
+  - id: api-types-and-crds-3
+    type: constraint
+    topic: api-types-and-crds
+    claim: "spec.namespace is immutable on Istio, IstioRevision, and IstioCNI via XValidation rule self == oldSelf"
+    source: "api/v1/istio_types.go"
+    provenance:
+      origin: inferred
+
+  - id: api-types-and-crds-4
+    type: pattern
+    topic: api-types-and-crds
+    claim: "StatusCondition uses custom ConditionType and ConditionReason string types rather than standard metav1.Condition"
+    source: "api/v1/condition.go"
+    provenance:
+      origin: inferred
+
+  - id: api-types-and-crds-5
+    type: pattern
+    topic: api-types-and-crds
+    claim: "SetCondition preserves LastTransitionTime when status hasn't changed, sets to truncated current time on transition"
+    source: "api/v1/condition.go"
+    provenance:
+      origin: inferred
+
+  - id: api-types-and-crds-6
+    type: boundary
+    topic: api-types-and-crds
+    claim: "IstioRevision validates spec.values.revision matches metadata.name or is empty when name is default"
+    source: "api/v1/istiorevision_types.go"
+    provenance:
+      origin: inferred
+
+  - id: api-types-and-crds-7
+    type: constraint
+    topic: api-types-and-crds
+    claim: "Version enum includes EOL versions that pass CRD validation but are rejected at controller level"
+    source: "api/v1/istio_types.go"
+    provenance:
+      origin: inferred
+
+  - id: api-types-and-crds-8
+    type: pattern
+    topic: api-types-and-crds
+    claim: "TargetReference type is shared between IstioRevisionTag and ZTunnel for referencing Istio or IstioRevision"
+    source: "api/v1/istiorevisiontags_types.go"
+    provenance:
+      origin: inferred
+
+  - id: api-types-and-crds-9
+    type: pattern
+    topic: api-types-and-crds
+    claim: "ResourceTakesPrecedence uses creation timestamp with UID as tie-breaker for name conflicts"
+    source: "pkg/validation/validation.go"
+    provenance:
+      origin: inferred
+
+  - id: api-types-and-crds-10
+    type: constraint
+    topic: api-types-and-crds
+    claim: "InPlace is the default update strategy with a TODO to change to RevisionBased"
+    source: "api/v1/istio_types.go"
+    provenance:
+      origin: inferred
+
+  - id: api-types-and-crds-11
+    type: technology
+    topic: api-types-and-crds
+    claim: "ZTunnel v1 is the storage version; v1alpha1 exists for backwards compatibility"
+    source: "api/v1/ztunnel_types.go"
+    provenance:
+      origin: inferred
+
+  - id: api-types-and-crds-12
+    type: pattern
+    topic: api-types-and-crds
+    claim: "Values types are auto-generated in values_types.gen.go from Istio Helm values JSON schema"
+    source: "api/v1/values_types.gen.go"
+    provenance:
+      origin: inferred
+
+  - id: api-types-and-crds-13
+    type: constraint
+    topic: api-types-and-crds
+    claim: "Default namespace is istio-system for Istio, istio-cni for IstioCNI, and ztunnel for ZTunnel"
+    source: "api/v1/istio_types.go"
+    provenance:
+      origin: inferred
+
+  - id: api-types-and-crds-14
+    type: constraint
+    topic: api-types-and-crds
+    claim: "ValidateTargetNamespace rejects namespaces that don't exist or are being deleted"
+    source: "pkg/validation/validation.go"
+    provenance:
+      origin: inferred
+
+  - id: api-types-and-crds-15
+    type: data_flow
+    topic: api-types-and-crds
+    claim: "Istio creates and owns IstioRevision; IstioRevisionTag and ZTunnel reference Istio/IstioRevision via TargetReference"
+    source: "api/v1/istiorevisiontags_types.go"
+    provenance:
+      origin: inferred
+
+  - id: version-management-1
+    type: pattern
+    topic: version-management
+    claim: "The first non-alias non-EOL entry in versions.yaml becomes Default and New; the second becomes Base"
+    source: "pkg/istioversion/version.go"
+    provenance:
+      origin: inferred
+
+  - id: version-management-2
+    type: technology
+    topic: version-management
+    claim: "Version parsing uses Masterminds/semver/v3 for all semantic version operations"
+    source: "pkg/istioversion/version.go"
+    provenance:
+      origin: inferred
+
+  - id: version-management-3
+    type: pattern
+    topic: version-management
+    claim: "Resolve() looks up a version name in Map and returns the resolved name; aliases resolve transparently"
+    source: "pkg/istioversion/version.go"
+    provenance:
+      origin: inferred
+
+  - id: version-management-4
+    type: constraint
+    topic: version-management
+    claim: "EOL versions are excluded from Map — Resolve returns error; controllers check IsEOLVersion for specific error message"
+    source: "pkg/istioversion/version.go"
+    provenance:
+      origin: inferred
+
+  - id: version-management-5
+    type: constraint
+    topic: version-management
+    claim: "Alias entries cannot have version, repo, commit, branch, or charts fields — parser panics if they do"
+    source: "pkg/istioversion/version.go"
+    provenance:
+      origin: inferred
+
+  - id: version-management-6
+    type: pattern
+    topic: version-management
+    claim: "Charts and profiles are embedded in the operator binary via resources.FS using embed.FS with //go:embed all:v*"
+    source: "resources/resources.go"
+    provenance:
+      origin: inferred
+
+  - id: version-management-7
+    type: boundary
+    topic: version-management
+    claim: "Charts are embedded in the binary to allow library consumers to import them and to support air-gapped environments"
+    source: "resources/resources.go"
+    provenance:
+      origin: user
+      context: "Embedding them into the binary allows library consumers to import them"
+      recorded: "2026-05-27"
+
+  - id: version-management-8
+    type: constraint
+    topic: version-management
+    claim: "pkg/istioversion/version.go panics at init if versions.yaml is missing, malformed, or has invalid aliases"
+    source: "pkg/istioversion/version.go"
+    provenance:
+      origin: inferred
+
+  - id: version-management-9
+    type: pattern
+    topic: version-management
+    claim: "VERSIONS_YAML_FILE env var overrides the versions filename during tests as a workaround for Go issue #64246"
+    source: "pkg/istioversion/version.go"
+    provenance:
+      origin: inferred
+
+  - id: version-management-10
+    type: constraint
+    topic: version-management
+    claim: "EOL versions remain in CRD spec.version enum to preserve API guarantees but are rejected at controller level"
+    source: "pkg/istioversion/versions.yaml"
+    provenance:
+      origin: inferred
+
+  - id: version-management-11
+    type: pattern
+    topic: version-management
+    claim: "Each version directory contains charts/, profiles/, a commit file, and .etag files for download caching"
+    source: "resources/"
+    provenance:
+      origin: inferred
+
+  - id: version-management-12
+    type: pattern
+    topic: version-management
+    claim: "GetLatestPatchVersions returns the highest patch version for each major.minor sorted descending"
+    source: "pkg/istioversion/version.go"
+    provenance:
+      origin: inferred
+
+  - id: version-management-13
+    type: pattern
+    topic: version-management
+    claim: "GetTwoConsecutiveMinorVersions returns base/new pair of consecutive minor versions for upgrade testing"
+    source: "pkg/istioversion/version.go"
+    provenance:
+      origin: inferred
+
+  - id: version-management-14
+    type: technology
+    topic: version-management
+    claim: "Operator build info (version, git revision, tag) is set via ldflags; controller-runtime version is detected from debug.ReadBuildInfo"
+    source: "pkg/version/version.go"
+    provenance:
+      origin: inferred
+
+  - id: version-management-15
+    type: pattern
+    topic: version-management
+    claim: "version.Constraint is a panic-on-error wrapper for semver.NewConstraint used in declarative version constraints"
+    source: "pkg/version/semverutils.go"
+    provenance:
+      origin: inferred

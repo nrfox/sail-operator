@@ -1,0 +1,26 @@
+{
+  "version": "1.0",
+  "branch": "main",
+  "last_active_sha": "0b046f8c25b023933f6f7045bbb1955f7ea70b49",
+  "last_active_time": "2026-05-27T00:00:00Z",
+  "current_phase": "draft",
+  "total_files_read": 34,
+  "topics": {
+    "controllers-architecture": {
+      "phase_status": "complete",
+      "files_read": 15
+    },
+    "helm-and-values": {
+      "phase_status": "complete",
+      "files_read": 11
+    },
+    "api-types-and-crds": {
+      "phase_status": "complete",
+      "files_read": 8
+    },
+    "version-management": {
+      "phase_status": "pending",
+      "files_read": 0
+    }
+  }
+}
