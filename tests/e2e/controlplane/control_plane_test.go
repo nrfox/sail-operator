@@ -39,6 +39,33 @@ var _ = Describe("Control Plane Installation", Label("control-plane", "slow", "s
 	SetDefaultEventuallyTimeout(time.Duration(env.GetInt("DEFAULT_TEST_TIMEOUT", 180)) * time.Second)
 	SetDefaultEventuallyPollingInterval(time.Second)
 
+<<<<<<< HEAD
+=======
+	debugInfoLogged := false
+
+	BeforeAll(func(ctx SpecContext) {
+		Fail("TODO: Testing please fix me")
+
+		Expect(kubectl.CreateNamespace(namespace)).To(Succeed(), "Namespace failed to be created")
+
+		extraArg := ""
+		if ocp {
+			extraArg = "--set=platform=openshift"
+		}
+
+		if skipDeploy {
+			Success("Skipping operator installation because it was deployed externally")
+		} else {
+			Expect(helm.Install("sail-operator", filepath.Join(project.RootDir, "chart"), "--namespace "+namespace, "--set=image="+image, extraArg)).
+				To(Succeed(), "Operator failed to be deployed")
+		}
+
+		Eventually(common.GetObject).WithArguments(ctx, cl, kube.Key(deploymentName, namespace), &appsv1.Deployment{}).
+			Should(HaveCondition(appsv1.DeploymentAvailable, metav1.ConditionTrue), "Error getting Istio CRD")
+		Success("Operator is deployed in the namespace and Running")
+	})
+
+>>>>>>> e78410b5 (WIP - Testing workflow automation)
 	Describe("defaulting", func() {
 		DescribeTable("IstioCNI",
 			Entry("no spec", ""),
