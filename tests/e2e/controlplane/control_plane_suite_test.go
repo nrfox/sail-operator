@@ -47,7 +47,6 @@ var (
 )
 
 func TestControlPlane(t *testing.T) {
-	t.Fatal("TESTING...")
 	if ipFamily == "dual" || multicluster {
 		t.Skip("Skipping the control plane tests")
 	}
