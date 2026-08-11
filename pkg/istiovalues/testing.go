@@ -15,13 +15,16 @@
 // This file contains utilities for testing.
 package istiovalues
 
-import (
-	"testing"
-)
+// TestHelper defines the minimal interface needed for test helper functions.
+// This interface is compatible with both *testing.T and ginkgo.GinkgoTInterface.
+type TestHelper interface {
+	Helper()
+	Cleanup(func())
+}
 
 // EnableFIPS overrides fipsEnabled to return true for the duration of the test.
 // This should ONLY be used for testing as it always returns true.
-func EnableFIPS(t testing.TB) {
+func EnableFIPS(t TestHelper) {
 	t.Helper()
 	original := fipsEnabled
 	t.Cleanup(func() { fipsEnabled = original })
