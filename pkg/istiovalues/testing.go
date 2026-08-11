@@ -19,9 +19,27 @@ import (
 	"testing"
 )
 
+// testHelper provides a minimal interface for test cleanup that works with both
+// testing.TB and Ginkgo's FullGinkgoTInterface. This avoids issues with Go 1.26's
+// addition of ArtifactDir() to testing.TB, which Ginkgo doesn't yet implement.
+type testHelper interface {
+	Helper()
+	Cleanup(func())
+}
+
 // EnableFIPS overrides fipsEnabled to return true for the duration of the test.
 // This should ONLY be used for testing as it always returns true.
 func EnableFIPS(t testing.TB) {
+	t.Helper()
+	original := fipsEnabled
+	t.Cleanup(func() { fipsEnabled = original })
+	fipsEnabled = func() bool { return true }
+}
+
+// EnableFIPSForGinkgo overrides fipsEnabled to return true for the duration of the test.
+// This variant accepts any test helper that supports Helper() and Cleanup(),
+// making it compatible with both testing.TB and Ginkgo's GinkgoT().
+func EnableFIPSForGinkgo(t testHelper) {
 	t.Helper()
 	original := fipsEnabled
 	t.Cleanup(func() { fipsEnabled = original })
