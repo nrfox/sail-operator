@@ -15,13 +15,16 @@
 // This file contains utilities for testing.
 package istiovalues
 
-import (
-	"testing"
-)
+// testingT is a minimal interface that supports both testing.TB and ginkgo.FullGinkgoTInterface.
+// This allows EnableFIPS to work with both standard Go tests and Ginkgo tests.
+type testingT interface {
+	Helper()
+	Cleanup(func())
+}
 
 // EnableFIPS overrides fipsEnabled to return true for the duration of the test.
 // This should ONLY be used for testing as it always returns true.
-func EnableFIPS(t testing.TB) {
+func EnableFIPS(t testingT) {
 	t.Helper()
 	original := fipsEnabled
 	t.Cleanup(func() { fipsEnabled = original })
