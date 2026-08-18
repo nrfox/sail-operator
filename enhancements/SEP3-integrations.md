@@ -1,6 +1,6 @@
 |Status                                             | Authors      | Created    | 
 |---------------------------------------------------|--------------|------------|
-| WIP                                               | @nrfox, @jcordoba | 2026-07-22 |
+| WIP                                               | @nrfox       | 2026-07-22 |
 
 # Integrations API
 
