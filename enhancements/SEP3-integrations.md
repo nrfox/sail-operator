@@ -5,9 +5,7 @@
 # Integrations API
 
 ## Overview
-Configuring Istio to work with various integrations, especially on OpenShift, often requires following rote procedures that are easy to get wrong. This SEP defines the **Integrations API** — new CRDs and controller behavior to simplify that wiring while giving users full control over their resources.
-
-This SEP also documents **Perses dashboard and datasource productization** as a separate OSSM deliverable. Productization covers the Istio `PersesDashboard` and `PersesDatasource` definitions Red Hat ships, versions, and tests. The Integrations API provides the `DashboardIntegration` CRD that provisions those resources and wires Kiali; the productization sections define the bundled content, datasource wiring to Thanos/COO metrics, and the supported OpenShift environment.
+Configuring Istio to work with various integrations, especially on OpenShift, often requires following rote procedures that are easy to get wrong. This SEP aims to provide a new CRD(s) to simplify this process while still giving users full control over their resources.
 
 ## Goals
 - Simplify integrations with Istio, especially on OpenShift
@@ -601,34 +599,23 @@ flowchart TD
     end
 
     subgraph "References"
-        MS["MonitoringStack
-(COO)"]
-        TS["TempoStack
-(Tempo Operator)"]
-        PD["PersesDashboard
-(Perses Operator)"]
-        PDS["PersesDatasource
-(Perses Operator)"]
+        MS["MonitoringStack (COO)"]
+        TS["TempoStack (Tempo Operator)"]
+        PD["PersesDashboard (Perses Operator)"]
+        PDS["PersesDatasource (Perses Operator)"]
     end
 
-    MI -- "target:
-Istio" --> Istio
-    MI -- "target:
-Kiali" --> Kiali
-    MI -. "metrics:
-ClusterObservability" .-> MS
+    MI -- "target: Istio" --> Istio
+    MI -- "target: Kiali" --> Kiali
+    MI -. "metrics: ClusterObservability" .-> MS
 
-    TI -- "target:
-Istio" --> Istio
-    TI -- "target:
-Kiali" --> Kiali
-    TI -. "tracing:
-TempoStack" .-> TS
+    TI -- "target: Istio" --> Istio
+    TI -- "target: Kiali" --> Kiali
+    TI -. "tracing: TempoStack" .-> TS
 
     DI -. "provisions" .-> PDS
     DI -. "provisions" .-> PD
-    DI -- "target:
-Kiali" --> Kiali
+    DI -- "target: Kiali" --> Kiali
     PDS -. "queries" .-> MS
 
     style MI fill:#4a9eff,color:#fff
