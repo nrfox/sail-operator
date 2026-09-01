@@ -1,0 +1,4 @@
+category: added
+title: CLI tool to generate changelog entries
+description: |
+  Added a CLI tool to make it easier to generate CHANGELOG entries.
