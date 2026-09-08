@@ -264,6 +264,10 @@ run: gen ## Run a controller from your host.
 docker-build: build ## Build docker image.
 	docker build ${DOCKER_BUILD_FLAGS} -t ${IMAGE} . --load
 
+.PHONY: docker-build-full
+docker-build-full: ## Build docker image entirely inside Docker.
+	docker build ${DOCKER_BUILD_FLAGS} --build-arg OPENSHIFT_BUILD_COMMIT=$${OPENSHIFT_BUILD_COMMIT:-unknown} -f full-build.Dockerfile -t ${IMAGE} . --load
+
 PHONY: push
 push: docker-push ## Build and push docker image.
 
@@ -479,7 +483,7 @@ gen-api: tidy-go ## Generate API types from upstream files.
 
 .PHONY: gen-code
 gen-code: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object:headerFile="common/scripts/copyright-banner-go.txt" paths="./..."
+	$(CONTROLLER_GEN) object:headerFile="common/scripts/copyright-banner-go.txt" applyconfiguration:headerFile="common/scripts/copyright-banner-go.txt" paths="./..."
 
 export FORCE_DOWNLOADS
 .PHONY: download-istio-charts
@@ -607,7 +611,7 @@ CRD_SCHEMA_CHECKER ?= $(LOCALBIN)/crd-schema-checker
 ## Tool Versions
 OPERATOR_SDK_VERSION ?= v1.42.3
 HELM_VERSION ?= v4.2.4
-CONTROLLER_TOOLS_VERSION ?= v0.21.0
+CONTROLLER_TOOLS_VERSION ?= v0.22.0
 CONTROLLER_RUNTIME_BRANCH ?= release-0.24
 OPM_VERSION ?= v1.73.0
 OLM_VERSION ?= v0.46.0
