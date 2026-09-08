@@ -18,6 +18,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
+	"strconv"
+	"strings"
 
 	"github.com/go-logr/logr"
 	v1 "github.com/istio-ecosystem/sail-operator/api/v1"
@@ -44,10 +48,12 @@ import (
 )
 
 const (
-	fieldManager           = "sail-operator-tracing-integration"
-	otelCollectorKind      = "OpenTelemetryCollector"
-	defaultOTLPGRPCPort    = uint32(4317)
-	telemetryResourceLabel = "sailoperator.io/tracing-integration"
+	fieldManager              = "sail-operator-tracing-integration"
+	otelCollectorKind         = "OpenTelemetryCollector"
+	defaultOTLPGRPCPort       = uint32(4317)
+	defaultOTLPHTTPPort       = uint32(4318)
+	defaultOTLPHTTPTracesPath = "/v1/traces"
+	telemetryResourceLabel    = "sailoperator.io/tracing-integration"
 )
 
 // TracingReconciler reconciles TracingIntegration objects.
@@ -195,8 +201,20 @@ func (r *TracingReconciler) reconcileIstioTarget(
 func (r *TracingReconciler) applyIstioTracing(ctx context.Context, istio *v1.Istio, tracingIntegration *v1alpha1.TracingIntegration) error {
 	collectorRef := tracingIntegration.Spec.OpenTelemetry.OTELCollectorRef
 	providerName := collectorRef.Name
-	// TODO: Pull this from the otel collector directly if need be.
 	service := fmt.Sprintf("%s-collector.%s.svc.cluster.local", collectorRef.Name, collectorRef.Namespace)
+
+	collector := &otelv1beta1.OpenTelemetryCollector{}
+	if err := r.Client.Get(ctx, client.ObjectKey{Namespace: collectorRef.Namespace, Name: collectorRef.Name}, collector); err != nil {
+		if apierrors.IsNotFound(err) || apimeta.IsNoMatchError(err) {
+			return reconciler.NewValidationError(fmt.Sprintf("referenced %s %s/%s was not found", otelCollectorKind, collectorRef.Namespace, collectorRef.Name))
+		}
+		return err
+	}
+
+	otelProvider, err := openTelemetryTracingProvider(service, collector)
+	if err != nil {
+		return err
+	}
 
 	obj := &v1.Istio{
 		TypeMeta: metav1.TypeMeta{
@@ -210,11 +228,8 @@ func (r *TracingReconciler) applyIstioTracing(ctx context.Context, istio *v1.Ist
 					EnableTracing: new(true),
 					ExtensionProviders: []*v1.MeshConfigExtensionProvider{
 						{
-							Name: new(providerName),
-							Opentelemetry: &v1.MeshConfigExtensionProviderOpenTelemetryTracingProvider{
-								Service: new(service),
-								Port:    new(defaultOTLPGRPCPort),
-							},
+							Name:          new(providerName),
+							Opentelemetry: otelProvider,
 						},
 					},
 				},
@@ -222,6 +237,128 @@ func (r *TracingReconciler) applyIstioTracing(ctx context.Context, istio *v1.Ist
 		},
 	}
 	return r.applyObject(ctx, obj)
+}
+
+func openTelemetryTracingProvider(
+	service string,
+	collector *otelv1beta1.OpenTelemetryCollector,
+) (*v1.MeshConfigExtensionProviderOpenTelemetryTracingProvider, error) {
+	port, useHTTP, httpPath, err := otelReceiverPort(collector)
+	if err != nil {
+		return nil, err
+	}
+
+	provider := &v1.MeshConfigExtensionProviderOpenTelemetryTracingProvider{
+		Service: new(service),
+		Port:    new(port),
+	}
+	if useHTTP {
+		provider.Http = &v1.MeshConfigExtensionProviderHttpService{
+			Path: new(httpPath),
+		}
+	}
+	return provider, nil
+}
+
+func otelReceiverPort(collector *otelv1beta1.OpenTelemetryCollector) (uint32, bool, string, error) {
+	protocols, err := otlpReceiverProtocols(collector)
+	if err != nil {
+		return 0, false, "", err
+	}
+
+	// Prefer gRPC when both OTLP receiver protocols are configured.
+	if grpcConfig, ok := protocols["grpc"]; ok {
+		port, err := otelProtocolPort(grpcConfig, defaultOTLPGRPCPort, "grpc")
+		return port, false, "", err
+	}
+	if httpConfig, ok := protocols["http"]; ok {
+		port, err := otelProtocolPort(httpConfig, defaultOTLPHTTPPort, "http")
+		if err != nil {
+			return 0, false, "", err
+		}
+		return port, true, otelHTTPTracesPath(httpConfig), nil
+	}
+
+	return 0, false, "", reconciler.NewValidationError("OpenTelemetryCollector spec.config.receivers.otlp.protocols must define grpc or http")
+}
+
+func otlpReceiverProtocols(collector *otelv1beta1.OpenTelemetryCollector) (map[string]any, error) {
+	receivers := collector.Spec.Config.Receivers.Object
+	otlpReceiver, ok := nestedMap(receivers["otlp"])
+	if !ok {
+		return nil, reconciler.NewValidationError("OpenTelemetryCollector spec.config.receivers must define an otlp receiver")
+	}
+	protocols, ok := nestedMap(otlpReceiver["protocols"])
+	if !ok {
+		return nil, reconciler.NewValidationError("OpenTelemetryCollector spec.config.receivers.otlp must define protocols")
+	}
+	return protocols, nil
+}
+
+func otelProtocolPort(protocolConfig any, defaultPort uint32, protocol string) (uint32, error) {
+	config, ok := nestedMap(protocolConfig)
+	if !ok {
+		return 0, reconciler.NewValidationError(fmt.Sprintf("OpenTelemetryCollector otlp %s protocol config must be an object", protocol))
+	}
+
+	endpoint, ok := stringValue(config["endpoint"])
+	if !ok || strings.TrimSpace(endpoint) == "" {
+		return defaultPort, nil
+	}
+	port, err := parseEndpointPort(endpoint)
+	if err != nil {
+		return 0, reconciler.NewValidationError(fmt.Sprintf("OpenTelemetryCollector otlp %s endpoint %q must include a valid port: %v", protocol, endpoint, err))
+	}
+	return port, nil
+}
+
+func otelHTTPTracesPath(protocolConfig any) string {
+	config, ok := nestedMap(protocolConfig)
+	if !ok {
+		return defaultOTLPHTTPTracesPath
+	}
+	if path, ok := stringValue(config["traces_url_path"]); ok && strings.TrimSpace(path) != "" {
+		return path
+	}
+	return defaultOTLPHTTPTracesPath
+}
+
+func parseEndpointPort(endpoint string) (uint32, error) {
+	endpoint = strings.TrimSpace(endpoint)
+	if parsedURL, err := url.Parse(endpoint); err == nil && parsedURL.Scheme != "" {
+		return parsePort(parsedURL.Port())
+	}
+
+	_, port, err := net.SplitHostPort(endpoint)
+	if err != nil {
+		lastColon := strings.LastIndex(endpoint, ":")
+		if lastColon < 0 || lastColon == len(endpoint)-1 {
+			return 0, err
+		}
+		port = endpoint[lastColon+1:]
+	}
+	return parsePort(port)
+}
+
+func parsePort(port string) (uint32, error) {
+	parsedPort, err := strconv.ParseUint(port, 10, 16)
+	if err != nil {
+		return 0, err
+	}
+	if parsedPort == 0 {
+		return 0, fmt.Errorf("port must be greater than 0")
+	}
+	return uint32(parsedPort), nil
+}
+
+func nestedMap(value any) (map[string]any, bool) {
+	typedValue, ok := value.(map[string]any)
+	return typedValue, ok
+}
+
+func stringValue(value any) (string, bool) {
+	typedValue, ok := value.(string)
+	return typedValue, ok
 }
 
 func (r *TracingReconciler) applyTelemetry(ctx context.Context, tracingIntegration *v1alpha1.TracingIntegration, namespace, providerName string) error {

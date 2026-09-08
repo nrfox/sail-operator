@@ -54,6 +54,7 @@ CONTAINER_CLI=podman DOCKER_GID=0 make deploy
 ## Code Style and Conventions
 
 - **Language**: Go 1.24+ with modules
+- **Pointers**: ALWAYS prefer the built-in `new` over `ptr.To`/`ptr.Of` helpers. As of Go 1.26, `new` can be used with types or expressions.
 - **Framework**: Kubebuilder with controller-runtime
 - **Testing**: Ginkgo/Gomega for E2E/integration tests, standard Go testing for unit tests
 - **Commit signing**: Required with `-s` flag
