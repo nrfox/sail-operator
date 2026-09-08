@@ -35,8 +35,9 @@ The working tree currently contains an initial implementation of:
 1. **DeepCopy generation is required for new API types**
    - Adding `TracingIntegration` to `api/v1alpha1/groupversion_info.go` fails compilation until `make gen-code` is run because the new type must implement `runtime.Object` via generated `DeepCopyObject`.
 
-2. **Telemetry v1 scheme was not registered**
+2. **External API schemes must be registered**
    - The controller watches/applies `telemetry.istio.io/v1` `Telemetry` resources, so `istio.io/client-go/pkg/apis/telemetry/v1` needed to be added to `pkg/scheme/scheme.go`.
+   - The controller now imports `github.com/open-telemetry/opentelemetry-operator/apis/v1beta1` directly and registers it with the scheme for typed `OpenTelemetryCollector` reads/watches.
 
 3. **CRD condition schema requirements**
    - The project’s CRD compatibility checker expects standard condition SSA markers:
@@ -49,7 +50,7 @@ The working tree currently contains an initial implementation of:
    - The helper is `apimeta.SetStatusCondition` from `k8s.io/apimachinery/pkg/api/meta`.
 
 5. **Server-side apply conflicts**
-   - The SEP says the controller should never force conflicts. The controller uses `types.ApplyPatchType` with `client.FieldOwner(...)`, but intentionally does not use `client.ForceOwnership`.
+   - The SEP says the controller should never force conflicts. The controller uses server-side apply with `client.FieldOwner(...)`, but intentionally does not use `client.ForceOwnership`.
    - On SSA conflict, the reconciler records status and returns no reconcile error so it does not hot-loop trying to take ownership.
 
 6. **SSA creation of owned Telemetry and owner refs**
@@ -67,8 +68,7 @@ The working tree currently contains an initial implementation of:
 
 10. **Provider service naming is assumed**
     - OpenTelemetry service is currently assumed to be `<collector-name>-collector.<namespace>.svc.cluster.local`.
-    - TempoStack service is currently assumed to be `<tempostack-name>-distributor.<namespace>.svc.cluster.local`.
-    - These may need to be derived from operator status or configurable fields instead.
+    - This may need to be derived from operator status or configurable fields instead.
 
 11. **Only Istio target is implemented**
     - `Kiali` target handling is not implemented. Unsupported target kinds currently mark the `TracingIntegration` invalid.
@@ -80,7 +80,8 @@ The working tree currently contains an initial implementation of:
 
 - Reworked controller apply paths to build typed `Istio` and `Telemetry` objects instead of hand-written `map[string]any` payloads. The typed objects are converted to unstructured apply configurations only at the controller-runtime SSA boundary.
 - Changed generated `Telemetry` name to `mesh-default`.
-- Left `TempoStack` in the API, but made controller behavior explicitly return `InvalidConfiguration`/not implemented and removed TempoStack read RBAC from the role/CSV.
+- Removed references to the unsupported tracing backend from the API, controller, generated CRD, and CSV/RBAC for now.
+- Added `github.com/open-telemetry/opentelemetry-operator/apis` as a direct dependency and switched OpenTelemetryCollector validation/watch logic to typed `v1beta1.OpenTelemetryCollector` objects.
 - Added an OpenTelemetry service-convention TODO near the service name derivation.
 - Added a separate `Conflicted` condition. SSA conflicts no longer make `Reconciled=False`; they set `Reconciled=True`, `Conflicted=True`, and state `ApplyConflict` without retrying/forcing ownership.
 - Used `client.ObjectKey` and `controllerutil.SetControllerReference` in controller code; `blockOwnerDeletion` is cleared after setting the controller reference to avoid requiring finalizer/update admission permissions for this initial implementation.
@@ -95,19 +96,15 @@ The working tree currently contains an initial implementation of:
 
 3. For `OpenTelemetry`, is `<name>-collector.<namespace>.svc.cluster.local:4317` the correct service/port convention for all supported OpenTelemetry Operator versions, or should the controller read the `OpenTelemetryCollector` status/spec/service?
 
-4. For `TempoStack`, should this initial implementation support it now, or should `TempoStack` be API-only until the Tempo service/status contract is better defined?
+4. What name should the generated `Telemetry` resource use?
 
-5. For `TempoStack`, what should the Istio `extensionProviders` service point at? The current assumption is `<name>-distributor.<namespace>.svc.cluster.local:4317`.
+5. Should the generated `Telemetry` resource be mesh-wide in the Istio control plane namespace with no selector, as currently implemented, or should it target a particular revision/workload selection?
 
-6. What name should the generated `Telemetry` resource use? The current implementation uses `tracing-<TracingIntegration name>` in the Istio control plane namespace.
+6. On SSA conflicts, should status distinguish partial success from complete failure?
 
-7. Should the generated `Telemetry` resource be mesh-wide in the control plane namespace with no selector, as currently implemented, or should it target a particular revision/workload selection?
+7. Should duplicate target conflicts consider only `kind/name/namespace`, as currently implemented, or also API group/version once the API grows beyond simple `kind`?
 
-8. On SSA conflicts, should status distinguish partial success from complete failure? Currently any conflict marks `Reconciled=False` with reason `ReconcileError`, while avoiding retry.
-
-9. Should duplicate target conflicts consider only `kind/name/namespace`, as currently implemented, or also API group/version once the API grows beyond simple `kind`?
-
-10. Do we want the common `TargetReference` and `NamespacedReference` types in a separate shared API file now, anticipating `MetricsIntegration` and `CertificateIntegration`, or is keeping them in `tracingintegration_types.go` acceptable until those APIs are added?
+8. Do we want the common `TargetReference` and `NamespacedReference` types in a separate shared API file now, anticipating `MetricsIntegration` and `CertificateIntegration`, or is keeping them in `tracingintegration_types.go` acceptable until those APIs are added?
 
 ## Answers
 
@@ -117,18 +114,14 @@ The working tree currently contains an initial implementation of:
 
 3. Use the `<otelCollectorRef.name>-collector.<namespace>.svc.cluster.local:4317` service convention for now. Add a TODO near that code asking whether the controller should read the collector resource/status/spec/service instead.
 
-4. Do not implement `TempoStack` behavior now.
+4. The generated `Telemetry` resource should be named `mesh-default`.
 
-5. Do not implement `TempoStack` behavior now, including service derivation.
+5. The generated `Telemetry` resource should be mesh-wide in the Istio control plane namespace.
 
-6. The generated `Telemetry` resource should be named `mesh-default`.
+6. SSA conflicts should have a separate condition, but conflicts are not a failure state. The overall integration should not be marked failed just because conflicts exist.
 
-7. The generated `Telemetry` resource should be mesh-wide in the Istio control plane namespace.
+7. For now, duplicate target conflict detection should use only `kind`, `name`, and optional `namespace`. API group/version may be considered in the future if `TargetReference` grows those fields or if ambiguous target kinds become a concern.
 
-8. SSA conflicts should have a separate condition, but conflicts are not a failure state. The overall integration should not be marked failed just because conflicts exist.
+8. Keep `TargetReference` and `NamespacedReference` in `tracingintegration_types.go` for now; do not move them to a separate shared API file yet.
 
-9. For now, duplicate target conflict detection should use only `kind`, `name`, and optional `namespace`. API group/version may be considered in the future if `TargetReference` grows those fields or if ambiguous target kinds become a concern.
-
-10. Keep `TargetReference` and `NamespacedReference` in `tracingintegration_types.go` for now; do not move them to a separate shared API file yet.
-
-11. Controller apply code should use real Kubernetes/API types rather than `map[string]any` patches where possible. For example, `applyTelemetry` should construct a typed `telemetryv1.Telemetry` instead of a `map[string]any` payload.
+9. Controller apply code should use real Kubernetes/API types rather than `map[string]any` patches where possible. For example, `applyTelemetry` should construct a typed `telemetryv1.Telemetry` instead of a `map[string]any` payload.

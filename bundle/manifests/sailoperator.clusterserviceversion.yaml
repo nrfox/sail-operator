@@ -404,13 +404,9 @@ spec:
             path: type
             x-descriptors:
               - urn:alm:descriptor:com.tectonic.ui:select:OpenTelemetry
-              - urn:alm:descriptor:com.tectonic.ui:select:TempoStack
           - description: OpenTelemetry configures integration with an OpenTelemetry Collector.
             displayName: OpenTelemetry
             path: openTelemetry
-          - description: TempoStack configures integration with a TempoStack resource.
-            displayName: TempoStack
-            path: tempoStack
         version: v1alpha1
       - description: ZTunnel represents a deployment of the Istio ztunnel component.
         displayName: ZTunnel

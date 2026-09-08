@@ -62,33 +62,22 @@ type TracingType string
 const (
 	// TracingTypeOpenTelemetry configures tracing through an OpenTelemetry Collector.
 	TracingTypeOpenTelemetry TracingType = "OpenTelemetry"
-	// TracingTypeTempoStack configures tracing through a TempoStack.
-	TracingTypeTempoStack TracingType = "TempoStack"
 )
 
 // TracingConfig configures a tracing backend.
 type TracingConfig struct {
 	// Type specifies the tracing integration type.
-	// +kubebuilder:validation:Enum=OpenTelemetry;TempoStack
+	// +kubebuilder:validation:Enum=OpenTelemetry
 	Type TracingType `json:"type"`
 
 	// OpenTelemetry configures integration with an OpenTelemetry Collector.
 	OpenTelemetry *OpenTelemetryConfig `json:"openTelemetry,omitempty"`
-
-	// TempoStack configures integration with a TempoStack resource.
-	TempoStack *TempoStackConfig `json:"tempoStack,omitempty"`
 }
 
 // OpenTelemetryConfig configures the OpenTelemetry integration.
 type OpenTelemetryConfig struct {
 	// OTELCollectorRef is a reference to an OpenTelemetry Collector resource.
 	OTELCollectorRef NamespacedReference `json:"otelCollectorRef"`
-}
-
-// TempoStackConfig configures the TempoStack integration.
-type TempoStackConfig struct {
-	// TempoStackRef is a reference to a TempoStack resource.
-	TempoStackRef NamespacedReference `json:"tempoStackRef"`
 }
 
 // TracingIntegrationStatus defines the observed state of TracingIntegration.
@@ -164,7 +153,6 @@ const (
 // +kubebuilder:printcolumn:name="Status",type="string",JSONPath=".status.state",description="The current state of this object."
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp",description="The age of the object"
 // +kubebuilder:validation:XValidation:rule="self.spec.type == 'OpenTelemetry' ? has(self.spec.openTelemetry) : !has(self.spec.openTelemetry)",message="spec.openTelemetry must be set if and only if spec.type is OpenTelemetry"
-// +kubebuilder:validation:XValidation:rule="self.spec.type == 'TempoStack' ? has(self.spec.tempoStack) : !has(self.spec.tempoStack)",message="spec.tempoStack must be set if and only if spec.type is TempoStack"
 
 // TracingIntegration configures Istio tracing integrations.
 type TracingIntegration struct {

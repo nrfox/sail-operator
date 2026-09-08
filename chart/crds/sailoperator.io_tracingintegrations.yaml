@@ -109,33 +109,10 @@ spec:
                   type: object
                 minItems: 1
                 type: array
-              tempoStack:
-                description: TempoStack configures integration with a TempoStack resource.
-                properties:
-                  tempoStackRef:
-                    description: TempoStackRef is a reference to a TempoStack resource.
-                    properties:
-                      name:
-                        description: Name is the name of the referenced resource.
-                        minLength: 1
-                        type: string
-                      namespace:
-                        description: Namespace is the namespace of the referenced
-                          resource.
-                        minLength: 1
-                        type: string
-                    required:
-                    - name
-                    - namespace
-                    type: object
-                required:
-                - tempoStackRef
-                type: object
               type:
                 description: Type specifies the tracing integration type.
                 enum:
                 - OpenTelemetry
-                - TempoStack
                 type: string
             required:
             - targetRefs
@@ -220,8 +197,6 @@ spec:
         - message: spec.openTelemetry must be set if and only if spec.type is OpenTelemetry
           rule: 'self.spec.type == ''OpenTelemetry'' ? has(self.spec.openTelemetry)
             : !has(self.spec.openTelemetry)'
-        - message: spec.tempoStack must be set if and only if spec.type is TempoStack
-          rule: 'self.spec.type == ''TempoStack'' ? has(self.spec.tempoStack) : !has(self.spec.tempoStack)'
     served: true
     storage: true
     subresources:
