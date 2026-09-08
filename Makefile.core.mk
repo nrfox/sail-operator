@@ -264,6 +264,10 @@ run: gen ## Run a controller from your host.
 docker-build: build ## Build docker image.
 	docker build ${DOCKER_BUILD_FLAGS} -t ${IMAGE} . --load
 
+.PHONY: docker-build-full
+docker-build-full: ## Build docker image entirely inside Docker.
+	docker build ${DOCKER_BUILD_FLAGS} --build-arg OPENSHIFT_BUILD_COMMIT -f full-build.Dockerfile -t ${IMAGE} . --load
+
 PHONY: push
 push: docker-push ## Build and push docker image.
 
