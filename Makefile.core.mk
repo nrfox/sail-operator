@@ -266,7 +266,7 @@ docker-build: build ## Build docker image.
 
 .PHONY: docker-build-full
 docker-build-full: ## Build docker image entirely inside Docker.
-	docker build ${DOCKER_BUILD_FLAGS} --build-arg OPENSHIFT_BUILD_COMMIT -f full-build.Dockerfile -t ${IMAGE} . --load
+	docker build ${DOCKER_BUILD_FLAGS} --build-arg OPENSHIFT_BUILD_COMMIT=$${OPENSHIFT_BUILD_COMMIT:-unknown} -f full-build.Dockerfile -t ${IMAGE} . --load
 
 PHONY: push
 push: docker-push ## Build and push docker image.
