@@ -25,6 +25,7 @@ import (
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 
 	networkingv1alpha3 "istio.io/client-go/pkg/apis/networking/v1alpha3"
+	telemetryv1 "istio.io/client-go/pkg/apis/telemetry/v1"
 )
 
 var Scheme = runtime.NewScheme()
@@ -33,6 +34,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(Scheme))
 	utilruntime.Must(multusv1.AddToScheme(Scheme))
 	utilruntime.Must(networkingv1alpha3.AddToScheme(Scheme))
+	utilruntime.Must(telemetryv1.AddToScheme(Scheme))
 	utilruntime.Must(configv1.AddToScheme(Scheme))
 
 	utilruntime.Must(v1alpha1.AddToScheme(Scheme))

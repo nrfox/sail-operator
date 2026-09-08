@@ -40,6 +40,28 @@ metadata:
             "namespace": "ztunnel",
             "version": "v1.31.0-beta.1"
           }
+        },
+        {
+          "apiVersion": "sailoperator.io/v1alpha1",
+          "kind": "TracingIntegration",
+          "metadata": {
+            "name": "openshift-observability"
+          },
+          "spec": {
+            "openTelemetry": {
+              "otelCollectorRef": {
+                "name": "otel",
+                "namespace": "istio-system"
+              }
+            },
+            "targetRefs": [
+              {
+                "kind": "Istio",
+                "name": "default"
+              }
+            ],
+            "type": "OpenTelemetry"
+          }
         }
       ]
     capabilities: Seamless Upgrades
@@ -369,6 +391,27 @@ spec:
             displayName: Helm Values
             path: values
         version: v1
+      - description: TracingIntegration configures Istio tracing integrations.
+        displayName: Tracing Integration
+        kind: TracingIntegration
+        name: tracingintegrations.sailoperator.io
+        specDescriptors:
+          - description: TargetRefs specifies the resources that this integration configures.
+            displayName: Target References
+            path: targetRefs
+          - description: Type specifies the tracing integration type.
+            displayName: Type
+            path: type
+            x-descriptors:
+              - urn:alm:descriptor:com.tectonic.ui:select:OpenTelemetry
+              - urn:alm:descriptor:com.tectonic.ui:select:TempoStack
+          - description: OpenTelemetry configures integration with an OpenTelemetry Collector.
+            displayName: OpenTelemetry
+            path: openTelemetry
+          - description: TempoStack configures integration with a TempoStack resource.
+            displayName: TempoStack
+            path: tempoStack
+        version: v1alpha1
       - description: ZTunnel represents a deployment of the Istio ztunnel component.
         displayName: ZTunnel
         kind: ZTunnel
@@ -678,6 +721,46 @@ spec:
                 - get
                 - patch
                 - update
+            - apiGroups:
+                - sailoperator.io
+              resources:
+                - tracingintegrations
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - sailoperator.io
+              resources:
+                - tracingintegrations/status
+              verbs:
+                - get
+                - patch
+                - update
+            - apiGroups:
+                - telemetry.istio.io
+              resources:
+                - telemetries
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - opentelemetry.io
+              resources:
+                - opentelemetrycollectors
+              verbs:
+                - get
+                - list
+                - watch
             - apiGroups:
                 - sailoperator.io
               resources:
