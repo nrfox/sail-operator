@@ -28,6 +28,7 @@ import (
 	"github.com/istio-ecosystem/sail-operator/api/v1alpha1"
 	"github.com/istio-ecosystem/sail-operator/pkg/config"
 	"github.com/istio-ecosystem/sail-operator/pkg/enqueuelogger"
+	applyv1 "github.com/istio-ecosystem/sail-operator/pkg/generated/applyconfigurations/api/v1"
 	"github.com/istio-ecosystem/sail-operator/pkg/reconciler"
 	otelv1beta1 "github.com/open-telemetry/opentelemetry-operator/apis/v1beta1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -216,27 +217,18 @@ func (r *TracingReconciler) applyIstioTracing(ctx context.Context, istio *v1.Ist
 		return err
 	}
 
-	obj := &v1.Istio{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: v1.GroupVersion.String(),
-			Kind:       v1.IstioKind,
-		},
-		ObjectMeta: metav1.ObjectMeta{Name: istio.Name},
-		Spec: v1.IstioSpec{
-			Values: &v1.Values{
-				MeshConfig: &v1.MeshConfig{
-					EnableTracing: new(true),
-					ExtensionProviders: []*v1.MeshConfigExtensionProvider{
-						{
-							Name:          new(providerName),
-							Opentelemetry: otelProvider,
-						},
-					},
-				},
-			},
-		},
+	extensionProvider := &v1.MeshConfigExtensionProvider{
+		Name:          new(providerName),
+		Opentelemetry: otelProvider,
 	}
-	return r.applyObject(ctx, obj)
+	applyConfig := applyv1.Istio(istio.Name).WithSpec(
+		applyv1.IstioSpec().WithValues(
+			applyv1.Values().WithMeshConfig(
+				applyv1.MeshConfig().WithEnableTracing(true).WithExtensionProviders(&extensionProvider),
+			),
+		),
+	)
+	return r.Client.Apply(ctx, applyConfig, client.FieldOwner(fieldManager))
 }
 
 func openTelemetryTracingProvider(
